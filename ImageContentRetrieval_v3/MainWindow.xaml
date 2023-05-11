@@ -63,8 +63,8 @@
                       AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="dg1_SelectionChanged" MouseDoubleClick="dg1_MouseDoubleClick">
                 <DataGrid.Columns>
                     <ui:DataGridTextColumn Header="相似度" Binding="{Binding Similarity}"/>
-                    <ui:DataGridTextColumn Header="索引位置" Binding="{Binding Index}"/>
-                    <ui:DataGridTextColumn Header="文件名" Binding="{Binding Filename}"/>
+                    <!--<ui:DataGridTextColumn Header="索引位置" Binding="{Binding Index}"/>-->
+                    <ui:DataGridTextColumn Header="文件名" Binding="{Binding Entity.Filename}"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Grid>

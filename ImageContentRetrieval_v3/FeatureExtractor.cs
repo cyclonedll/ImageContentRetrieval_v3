@@ -11,6 +11,7 @@
 */
 
 using NumSharp;
+using System.Collections.Concurrent;
 using Tensorflow;
 //using Tensorflow.NumPy;
 using static Tensorflow.Binding;
@@ -140,17 +141,12 @@ internal class FeatureExtractor : IDisposable
         => get_bottleneck_data(image_file, input_width, input_height, input_mean, input_std)?.ToArray<float>();
 
 
-
-
-
-
     public IEnumerable<(string, float[])> ExtractFeatures(
         IEnumerable<string> imageFilenames,
         int input_width = 299, int input_height = 299, int input_mean = 0, int input_std = 255)
     {
 
-        if (imageFilenames == null)
-            throw new NullReferenceException("imageFilenames");
+        ArgumentNullException.ThrowIfNull(imageFilenames, nameof(imageFilenames));
 
         var resultFeatures = new List<(string, float[])>();
 
@@ -169,14 +165,13 @@ internal class FeatureExtractor : IDisposable
     }
 
 
-    private int _index = 0;
+    private volatile int _index = 0;
     public async Task<IEnumerable<(string filename, float[] feature)>> ExtractFeaturesAsync(
         IEnumerable<string> imageFilenames,
         int input_width = 299, int input_height = 299, int input_mean = 0, int input_std = 255)
     {
 
-        if (imageFilenames == null)
-            throw new NullReferenceException("imageFilenames");
+        ArgumentNullException.ThrowIfNull(imageFilenames, nameof(imageFilenames));
 
         var count = imageFilenames.Count();
         Raise_GetFeaturesStared(count);
@@ -208,6 +203,9 @@ internal class FeatureExtractor : IDisposable
 
         });
     }
+
+
+
 
 
     #region events

@@ -1,9 +1,11 @@
-﻿using Microsoft.Win32;
+﻿using ImageContentRetrieval_v3.QuiverDb;
+using Microsoft.Win32;
 using Microsoft.WindowsAPICodePack.Dialogs;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using Vorcyc.Quiver;
 using Vorcyc.RoundUI.Windows.Controls;
 
 namespace ImageContentRetrieval_v3;
@@ -16,7 +18,8 @@ public partial class MainWindow : RoundNormalWindow
         this.Loaded += MainWindow_Loaded;
     }
 
-    private Ash2 _ash = new(1001, GetFileAbsolutePath("features.ash"));
+    //private Ash2 _ash;
+    private ImageDbContext _db = new(IOHelper.GetFileAbsolutePath("features.vdb"));
     private FeatureExtractor _featureExtractor;
 
 
@@ -33,14 +36,14 @@ public partial class MainWindow : RoundNormalWindow
 
         try
         {
-            await _ash.InitAsync();
+
+            await _db.LoadAsync();
 
             this.IsEnabled = true;
             _featureExtractor.GetFeaturesStarted += FeatureExtractor_GetFeaturesStarted;
             _featureExtractor.GetFeaturesProgressChanged += FeatureExtractor_GetFeaturesProgressChanged;
 
-            lblInfo.Content = $"已建模 {_ash.Count} 个图像文件";
-            //MessageBox.Show("loaded done");
+            lblInfo.Content = $"已建模 {_db.Images.Count} 个图像文件";
         }
         catch (Exception)
         {
@@ -90,17 +93,23 @@ public partial class MainWindow : RoundNormalWindow
 
 
 
-            files = _ash.Except(files);//ASH文件中已经有的，就排除；不须不再提取特征，否则非常耗时
-            var features = await _featureExtractor.ExtractFeaturesAsync(files);
-            _ash.AddRange(features);
-            await _ash.BuildAsync();
+            files = IOHelper.Except(files, _db.Images);//ASH文件中已经有的，就排除；不须不再提取特征，否则非常耗时
 
+            var features = await _featureExtractor.ExtractFeaturesAsync(files);
+            if (features is not null)
+            {
+                var set = FeaturesToImageDbSet(features);
+                _db.Images.AddRange(set);
+                await _db.SaveChangesAsync();
+            }
 
             sw.Stop();
 
-            lblInfo.Content = $"已建模 {_ash.Count} 个图像文件";
+            lblInfo.Content = $"已建模 {_db.Images.Count} 个图像文件";
 
-            MessageBox.Show($"对 {features.Count()} 个文件建库，耗时 {sw.Elapsed}");
+            var newCount = features is null ? 0 : features.Count();
+            //MessageBox.Show($"对 {newCount} 个文件建库，耗时 {sw.Elapsed}");
+            Vorcyc.RoundUI.Windows.Controls.ModernDialog.ShowMessage($"对 {newCount} 个文件建库，耗时 {sw.Elapsed}", "建库完成", MessageBoxButton.OK);
 
             this.IsEnabled = btnCleanup.IsEnabled = btnBuild.IsEnabled = btnRetrieval.IsEnabled = true;
             processBar1.Visibility = Visibility.Collapsed;
@@ -109,13 +118,27 @@ public partial class MainWindow : RoundNormalWindow
     }
 
 
-    private void btnRetrieval_Click(object sender, RoutedEventArgs e)
+    private static IEnumerable<ImageDb> FeaturesToImageDbSet(IEnumerable<(string filename, float[] embedding)> features)
+    {
+        foreach (var feature in features)
+        {
+            yield return new ImageDb
+            {
+                Filename = feature.filename,
+                ImageFeature = feature.embedding
+            };
+        }
+    }
+
+
+
+    private async void btnRetrieval_Click(object sender, RoutedEventArgs e)
     {
 
         //if (!System.IO.File.Exists(_ashFile))
-        if (_ash is null)
+        if (_db.Images.Count == 0)
         {
-            MessageBox.Show("特征库文件不存在，请先建库！");
+            MessageBox.Show("特征库无有效项，请先建库！");
             return;
         }
 
@@ -128,7 +151,7 @@ public partial class MainWindow : RoundNormalWindow
         {
             //var sw = System.Diagnostics.Stopwatch.StartNew();
 
-            var target_feature = _featureExtractor.ExtractFeature(ofd.FileName);
+            var query_feature = _featureExtractor.ExtractFeature(ofd.FileName);
 
             //sw.Stop();
             //MessageBox.Show("提单张图片特征耗时 ：" + sw.Elapsed);
@@ -140,14 +163,15 @@ public partial class MainWindow : RoundNormalWindow
                 return;
             }
 
-            var result = _ash.Retrieval(target_feature, return_count);
+            //var result =  _ash.Retrieval(target_feature, return_count);
+            var result = await _db.Images.SearchAsync(e => e.ImageFeature, query_feature, return_count, default);
 
             //sw.Stop();
 
             //MessageBox.Show("检索耗时 : " + sw.Elapsed);
 
 
-            dg1.ItemsSource = RetrievalResult.ConvertFromVauleTuple(result);
+            dg1.ItemsSource = result; //RetrievalResult.ConvertFromVauleTuple(result);
 
 
             //这样做就可以在打开的时候也删文件了
@@ -162,8 +186,8 @@ public partial class MainWindow : RoundNormalWindow
     {
         if (dg1.SelectedItem != null)
         {
-            var row = (RetrievalResult)dg1.SelectedItem;
-            imgSelected.Source = ReadImage(row.Filename);
+            var row = (QuiverSearchResult<ImageDb>)dg1.SelectedItem;
+            imgSelected.Source = ReadImage(row.Entity.Filename);
         }
     }
 
@@ -171,20 +195,18 @@ public partial class MainWindow : RoundNormalWindow
     private void dg1_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (dg1.SelectedItem == null) return;
-        var row = (RetrievalResult)dg1.SelectedItem;
-        ShellFolderSelector.LocateFile(row.Filename);
+        var row = (QuiverSearchResult<ImageDb>)dg1.SelectedItem;
+        ShellFolderSelector.LocateFile(row.Entity.Filename);
     }
-
-
 
 
     private async void btnCleanup_Click(object sender, RoutedEventArgs e)
     {
         this.IsEnabled = btnCleanup.IsEnabled = btnBuild.IsEnabled = btnRetrieval.IsEnabled = false;
 
-        await _ash.CleanupAsync();
+        await IOHelper.CleanupAsync(_db);
 
-        lblInfo.Content = $"已建模 {_ash.Count} 个图像文件";
+        lblInfo.Content = $"已建模 {_db.Images.Count} 个图像文件";
         this.IsEnabled = btnCleanup.IsEnabled = btnRetrieval.IsEnabled = btnBuild.IsEnabled = true;
     }
 
@@ -204,16 +226,6 @@ public partial class MainWindow : RoundNormalWindow
         return bi;
     }
 
-
-    public static string GetExecutionDirectory()
-    {
-        return System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-    }
-
-    public static string GetFileAbsolutePath(string filename)
-    {
-        return System.IO.Path.Combine(GetExecutionDirectory(), filename);
-    }
 
 
     #endregion

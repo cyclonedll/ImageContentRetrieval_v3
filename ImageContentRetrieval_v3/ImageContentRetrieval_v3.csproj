@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net7.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <Company>Vorcyc</Company>
@@ -14,8 +14,9 @@
   <ItemGroup>
     <PackageReference Include="SciSharp.TensorFlow.Redist" Version="2.7.0" />
     <PackageReference Include="TensorFlow.NET" Version="0.40.1" />
+    <PackageReference Include="Vorcyc.Quiver" Version="1.1.1" />
     <PackageReference Include="Vorcyc.RoundUI" Version="1.0.0" />
-    <PackageReference Include="WindowsAPICodePack" Version="7.0.4" />
+    <PackageReference Include="WindowsAPICodePack" Version="8.0.14" />
   </ItemGroup>
 
   <ItemGroup>
