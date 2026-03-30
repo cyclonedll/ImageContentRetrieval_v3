@@ -20,7 +20,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="inception_v3_2016_08_28_frozen.pb">
+    <None Update="label_image_data\imagenet_slim_labels.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="label_image_data\imagenet_slim_labels_combined.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="label_image_data\inception_v3_2016_08_28_frozen.pb">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

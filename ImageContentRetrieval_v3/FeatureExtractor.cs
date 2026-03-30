@@ -11,7 +11,6 @@
 */
 
 using NumSharp;
-using System.Collections.Concurrent;
 using Tensorflow;
 //using Tensorflow.NumPy;
 using static Tensorflow.Binding;
@@ -47,7 +46,7 @@ internal class FeatureExtractor : IDisposable
     private void import_graph()
     {
         _graph = new Graph();
-        _graph.Import(pbFile);
+        _graph.Import(Path.Join(dir, pbFile));
 
         //foreach (var n in graphDef.Node)
         //{

@@ -21,7 +21,7 @@ public partial class MainWindow : RoundNormalWindow
     //private Ash2 _ash;
     private ImageDbContext _db = new(IOHelper.GetFileAbsolutePath("features.vdb"));
     private FeatureExtractor _featureExtractor;
-
+    private Classifier _classifier;
 
     private System.Threading.SynchronizationContext _syncContext;
 
@@ -30,6 +30,7 @@ public partial class MainWindow : RoundNormalWindow
         _syncContext = System.Threading.SynchronizationContext.Current;
 
         _featureExtractor = new FeatureExtractor();
+        _classifier = new Classifier();
 
         this.IsEnabled = false;
         processBar1.Visibility = Visibility.Collapsed;
@@ -95,28 +96,63 @@ public partial class MainWindow : RoundNormalWindow
 
             files = IOHelper.Except(files, _db.Images);//ASH文件中已经有的，就排除；不须不再提取特征，否则非常耗时
 
-            var features = await _featureExtractor.ExtractFeaturesAsync(files);
-            if (features is not null)
+            //var features = await _featureExtractor.ExtractFeaturesAsync(files);
+            //if (features is not null)
+            //{
+            //    var set = FeaturesToImageDbSet(features);
+            //    _db.Images.AddRange(set);
+            //    await _db.SaveChangesAsync();
+            //}
+            var totalCount = files.Count();
+            int successCount = 0;
+            int index = 0;
+
+            processBar1.Maximum = totalCount;
+
+            await Task.Run(() =>
             {
-                var set = FeaturesToImageDbSet(features);
-                _db.Images.AddRange(set);
-                await _db.SaveChangesAsync();
-            }
+                foreach (var file in files)
+                {
+
+                    var classification = _classifier.Classify(file, return_count: 1);
+                    var embedding = _featureExtractor.ExtractFeature(file);
+
+                    var finnalClassification = classification is null ? null : classification.ElementAt(0).tag;
+                    var finnalEmbedding = embedding is null ? null : embedding;
+
+                    var imageDb = new ImageDb
+                    {
+                        Filename = file,
+                        ImageFeature = finnalEmbedding,
+                        Classification = finnalClassification
+                    };
+                    _db.Images.Add(imageDb);
+                    successCount++;
+
+                    index++;
+                    _syncContext.Post(state =>
+                    {
+                        processBar1.Value = index;
+                        lblInfo.Content = $"正在对新图像文件建模：({index}/{totalCount})";
+                    }, null);
+                }
+            });
+
+            await _db.SaveChangesAsync();
+
 
             sw.Stop();
 
             lblInfo.Content = $"已建模 {_db.Images.Count} 个图像文件";
 
-            var newCount = features is null ? 0 : features.Count();
-            //MessageBox.Show($"对 {newCount} 个文件建库，耗时 {sw.Elapsed}");
-            Vorcyc.RoundUI.Windows.Controls.ModernDialog.ShowMessage($"对 {newCount} 个文件建库，耗时 {sw.Elapsed}", "建库完成", MessageBoxButton.OK);
+            var newCount = successCount;
+            Vorcyc.RoundUI.Windows.Controls.ModernDialog.ShowMessage($"成功对 {successCount} 个文件建库，耗时 {sw.Elapsed}", "建库完成", MessageBoxButton.OK);
 
             this.IsEnabled = btnCleanup.IsEnabled = btnBuild.IsEnabled = btnRetrieval.IsEnabled = true;
             processBar1.Visibility = Visibility.Collapsed;
 
         }
     }
-
 
     private static IEnumerable<ImageDb> FeaturesToImageDbSet(IEnumerable<(string filename, float[] embedding)> features)
     {
@@ -129,8 +165,6 @@ public partial class MainWindow : RoundNormalWindow
             };
         }
     }
-
-
 
     private async void btnRetrieval_Click(object sender, RoutedEventArgs e)
     {
